@@ -1,0 +1,223 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =====================================================
+// USER & AUTHENTICATION
+// =====================================================
+
+enum Role {
+  ADMIN
+  OPERATOR
+  QUALITY
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(OPERATOR)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  checklistAnswers ChecklistAnswer[]
+  resolvedDefects  DefectLog[]
+
+  @@map("users")
+}
+
+// =====================================================
+// PROCESS MANAGEMENT (Master Data)
+// =====================================================
+
+model Process {
+  id                String   @id @default(cuid())
+  name              String   @unique
+  description       String?
+  checklistRequired Boolean  @default(false)
+  displayOrder      Int      @default(0)
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  batteryBoxProcesses BatteryBoxProcess[]
+
+  @@map("processes")
+}
+
+// =====================================================
+// CHECKLIST TEMPLATES (Master Data)
+// =====================================================
+
+model ChecklistTemplate {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  questions           ChecklistQuestion[]
+  batteryBoxProcesses BatteryBoxProcess[]
+
+  @@map("checklist_templates")
+}
+
+model ChecklistQuestion {
+  id                  String            @id @default(cuid())
+  checklistTemplateId String
+  questionText        String
+  questionType        QuestionType      @default(YES_NO)
+  displayOrder        Int               @default(0)
+  required            Boolean           @default(true)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  // Relations
+  checklistTemplate ChecklistTemplate   @relation(fields: [checklistTemplateId], references: [id], onDelete: Cascade)
+  answers           ChecklistAnswer[]
+
+  @@map("checklist_questions")
+}
+
+enum QuestionType {
+  YES_NO
+  TEXT
+  NUMBER
+}
+
+// =====================================================
+// BATTERY BOX TRACKING
+// =====================================================
+
+enum BatteryBoxStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+model BatteryBox {
+  id           String           @id @default(cuid())
+  serialNumber String           @unique
+  status       BatteryBoxStatus @default(IN_PROGRESS)
+  notes        String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  completedAt  DateTime?
+
+  // Relations
+  processes  BatteryBoxProcess[]
+  defectLogs DefectLog[]
+
+  @@map("battery_boxes")
+}
+
+// =====================================================
+// BATTERY BOX PROCESS (Junction with workflow state)
+// =====================================================
+
+enum ProcessStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+model BatteryBoxProcess {
+  id                  String        @id @default(cuid())
+  batteryBoxId        String
+  processId           String
+  checklistTemplateId String?
+  status              ProcessStatus @default(PENDING)
+  displayOrder        Int           @default(0)
+  startedAt           DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  // Relations
+  batteryBox        BatteryBox         @relation(fields: [batteryBoxId], references: [id], onDelete: Cascade)
+  process           Process            @relation(fields: [processId], references: [id])
+  checklistTemplate ChecklistTemplate? @relation(fields: [checklistTemplateId], references: [id])
+  answers           ChecklistAnswer[]
+
+  @@unique([batteryBoxId, processId])
+  @@map("battery_box_processes")
+}
+
+// =====================================================
+// CHECKLIST ANSWERS (Audit Trail)
+// =====================================================
+
+model ChecklistAnswer {
+  id                  String   @id @default(cuid())
+  batteryBoxProcessId String
+  questionId          String
+  answer              String
+  answeredById        String
+  answeredAt          DateTime @default(now())
+
+  // Relations
+  batteryBoxProcess BatteryBoxProcess @relation(fields: [batteryBoxProcessId], references: [id], onDelete: Cascade)
+  question          ChecklistQuestion @relation(fields: [questionId], references: [id])
+  answeredBy        User              @relation(fields: [answeredById], references: [id])
+  defectLog         DefectLog?
+
+  @@unique([batteryBoxProcessId, questionId])
+  @@map("checklist_answers")
+}
+
+// =====================================================
+// DEFECT LOG (Quality Engineering)
+// =====================================================
+
+enum DefectSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum DefectStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  CLOSED
+}
+
+model DefectLog {
+  id                  String         @id @default(cuid())
+  checklistAnswerId   String         @unique
+  batteryBoxId        String
+  category            String         // e.g., "GÖRSEL KONTROL", "MONTAJ KONTROL", etc.
+  subcategory         String?        // More specific classification
+  description         String         // The question text that failed
+  severity            DefectSeverity @default(MEDIUM)
+  status              DefectStatus   @default(OPEN)
+  notes               String?
+  resolvedById        String?
+  resolvedAt          DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  // Relations
+  checklistAnswer ChecklistAnswer @relation(fields: [checklistAnswerId], references: [id], onDelete: Cascade)
+  batteryBox      BatteryBox      @relation(fields: [batteryBoxId], references: [id])
+  resolvedBy      User?           @relation(fields: [resolvedById], references: [id])
+
+  @@index([category])
+  @@index([status])
+  @@index([severity])
+  @@index([createdAt])
+  @@map("defect_logs")
+}
