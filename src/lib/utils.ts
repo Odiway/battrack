@@ -9,13 +9,12 @@ export function formatDate(date: Date | string | null | undefined): string {
   if (!date) return '-'
   const d = new Date(date)
   // Use fixed locale and timezone to prevent hydration mismatch
-  return d.toLocaleDateString('tr-TR', {
+  return d.toLocaleDateString('en-US', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-    timeZone: 'Europe/Istanbul',
   })
 }
 
@@ -23,10 +22,9 @@ export function formatDateShort(date: Date | string | null | undefined): string 
   if (!date) return '-'
   const d = new Date(date)
   // Use fixed locale and timezone to prevent hydration mismatch
-  return d.toLocaleDateString('tr-TR', {
+  return d.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
-    timeZone: 'Europe/Istanbul',
   })
 }
 
