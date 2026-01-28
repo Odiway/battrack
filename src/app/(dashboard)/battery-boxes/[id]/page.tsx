@@ -105,11 +105,7 @@ export default function BatteryBoxDetailPage({
   const [loading, setLoading] = useState(true)
   const [activeProcess, setActiveProcess] = useState<string | null>(null)
   const [answers, setAnswers] = useState<Record<string, string>>({})
-  const [buttonSelections, setButtonSelections] = useState<
-    Record<string, string>
-  >({})
   const [saving, setSaving] = useState(false)
-  const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
     fetchBatteryBox()
@@ -146,54 +142,14 @@ export default function BatteryBoxDetailPage({
 
   function initializeAnswers(process: BatteryBoxProcess) {
     const initial: Record<string, string> = {}
-    const buttons: Record<string, string> = {}
     process.answers.forEach((a) => {
       initial[a.questionId] = a.answer
-      // Check if answer is one of the button values
-      if (['AÇIK', 'RED', 'KABUL'].includes(a.answer)) {
-        buttons[a.questionId] = a.answer
-      }
     })
     setAnswers(initial)
-    setButtonSelections(buttons)
   }
 
   function handleAnswerChange(questionId: string, value: string) {
     setAnswers((prev) => ({ ...prev, [questionId]: value }))
-  }
-
-  function handleButtonSelect(questionId: string, buttonValue: string) {
-    setButtonSelections((prev) => ({ ...prev, [questionId]: buttonValue }))
-  }
-
-  async function handleDownloadExcel() {
-    if (!batteryBox) return
-
-    setDownloading(true)
-    try {
-      const res = await fetch(
-        `/api/battery-boxes/${resolvedParams.id}/export`,
-        { method: 'GET' },
-      )
-
-      if (!res.ok) throw new Error()
-
-      const blob = await res.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${batteryBox.serialNumber}_report.xlsx`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-
-      toast.success('Excel downloaded successfully')
-    } catch {
-      toast.error('Failed to download Excel')
-    } finally {
-      setDownloading(false)
-    }
   }
 
   async function handleSaveAnswers() {
@@ -207,11 +163,7 @@ export default function BatteryBoxDetailPage({
     try {
       const payload = Object.entries(answers)
         .filter(([, v]) => v)
-        .map(([questionId, answer]) => ({
-          questionId,
-          answer,
-          buttonSelection: buttonSelections[questionId] || null,
-        }))
+        .map(([questionId, answer]) => ({ questionId, answer }))
 
       const res = await fetch(
         `/api/battery-boxes/${resolvedParams.id}/processes/${activeProcess}`,
@@ -230,6 +182,13 @@ export default function BatteryBoxDetailPage({
     } finally {
       setSaving(false)
     }
+  }
+
+  function handleExport(processId: string) {
+    window.open(
+      `/api/battery-boxes/${resolvedParams.id}/processes/${processId}/export`,
+      '_blank',
+    )
   }
 
   if (loading) {
@@ -260,7 +219,11 @@ export default function BatteryBoxDetailPage({
         <div className='relative flex items-center justify-between'>
           <div className='flex items-center gap-4'>
             <Link href='/battery-boxes'>
-              <Button size='icon' variant='ghost'>
+              <Button
+                size='icon'
+                variant='ghost'
+                className='text-slate-400 hover:text-white hover:bg-slate-800'
+              >
                 <ArrowLeft />
               </Button>
             </Link>
@@ -274,23 +237,15 @@ export default function BatteryBoxDetailPage({
             </div>
           </div>
 
-          <Button
-            onClick={handleDownloadExcel}
-            disabled={downloading}
-            className='bg-emerald-600 hover:bg-emerald-700'
-          >
-            {downloading ? (
-              <>
-                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                Downloading...
-              </>
-            ) : (
-              <>
-                <Download className='mr-2 h-4 w-4' />
-                Download Excel
-              </>
-            )}
-          </Button>
+          {activeProcess && (
+            <Button
+              onClick={() => handleExport(activeProcess)}
+              className='bg-emerald-600 hover:bg-emerald-700'
+            >
+              <Download className='mr-2 h-4 w-4' />
+              Download Excel
+            </Button>
+          )}
         </div>
       </div>
 
@@ -325,7 +280,6 @@ export default function BatteryBoxDetailPage({
           <CardContent className='space-y-6'>
             {currentProcess.checklistTemplate?.questions.map((q, i) => {
               const value = answers[q.id] || ''
-              const selectedButton = buttonSelections[q.id] || ''
 
               return (
                 <div key={q.id} className='space-y-3'>
@@ -349,10 +303,17 @@ export default function BatteryBoxDetailPage({
                     {/* Text/Number Input */}
                     <input
                       type={q.questionType === 'NUMBER' ? 'number' : 'text'}
-                      value={value}
+                      value={
+                        value === 'AÇIK' || value === 'RED' || value === 'KABUL'
+                          ? ''
+                          : value
+                      }
                       onChange={(e) => handleAnswerChange(q.id, e.target.value)}
                       placeholder='Enter your answer or measurement...'
-                      className='w-full h-11 px-4 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent'
+                      disabled={
+                        value === 'AÇIK' || value === 'RED' || value === 'KABUL'
+                      }
+                      className='w-full h-11 px-4 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:bg-slate-50 disabled:text-slate-500'
                     />
 
                     {/* Three Buttons */}
@@ -360,14 +321,12 @@ export default function BatteryBoxDetailPage({
                       <Button
                         type='button'
                         size='sm'
-                        variant={
-                          selectedButton === 'AÇIK' ? 'default' : 'outline'
-                        }
-                        onClick={() => handleButtonSelect(q.id, 'AÇIK')}
+                        variant={value === 'AÇIK' ? 'default' : 'outline'}
+                        onClick={() => handleAnswerChange(q.id, 'AÇIK')}
                         className={
-                          selectedButton === 'AÇIK'
+                          value === 'AÇIK'
                             ? 'bg-blue-600 hover:bg-blue-700'
-                            : ''
+                            : 'hover:bg-blue-50'
                         }
                       >
                         AÇIK
@@ -375,14 +334,12 @@ export default function BatteryBoxDetailPage({
                       <Button
                         type='button'
                         size='sm'
-                        variant={
-                          selectedButton === 'RED' ? 'default' : 'outline'
-                        }
-                        onClick={() => handleButtonSelect(q.id, 'RED')}
+                        variant={value === 'RED' ? 'default' : 'outline'}
+                        onClick={() => handleAnswerChange(q.id, 'RED')}
                         className={
-                          selectedButton === 'RED'
+                          value === 'RED'
                             ? 'bg-red-600 hover:bg-red-700'
-                            : ''
+                            : 'hover:bg-red-50'
                         }
                       >
                         RED
@@ -390,14 +347,12 @@ export default function BatteryBoxDetailPage({
                       <Button
                         type='button'
                         size='sm'
-                        variant={
-                          selectedButton === 'KABUL' ? 'default' : 'outline'
-                        }
-                        onClick={() => handleButtonSelect(q.id, 'KABUL')}
+                        variant={value === 'KABUL' ? 'default' : 'outline'}
+                        onClick={() => handleAnswerChange(q.id, 'KABUL')}
                         className={
-                          selectedButton === 'KABUL'
+                          value === 'KABUL'
                             ? 'bg-emerald-600 hover:bg-emerald-700'
-                            : ''
+                            : 'hover:bg-emerald-50'
                         }
                       >
                         KABUL
@@ -427,23 +382,15 @@ export default function BatteryBoxDetailPage({
                   'Save Answers'
                 )}
               </Button>
-              <Button
-                onClick={handleDownloadExcel}
-                disabled={downloading}
-                variant='outline'
-              >
-                {downloading ? (
-                  <>
-                    <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                    Downloading...
-                  </>
-                ) : (
-                  <>
-                    <Download className='mr-2 h-4 w-4' />
-                    Download Excel
-                  </>
-                )}
-              </Button>
+              {activeProcess && (
+                <Button
+                  onClick={() => handleExport(activeProcess)}
+                  variant='outline'
+                >
+                  <Download className='mr-2 h-4 w-4' />
+                  Download Excel
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>

@@ -1,232 +1,400 @@
 'use client'
 
-import { useAuth } from '@/components/auth-provider'
-import { useRouter, usePathname } from 'next/navigation'
+import { useEffect, useState, use } from 'react'
 import Link from 'next/link'
-import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { 
-  Battery, 
-  LayoutDashboard, 
-  Box, 
-  Settings, 
-  Users, 
-  ClipboardList,
-  Cog,
-  LogOut,
-  ChevronDown,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import {
+  ArrowLeft,
   Loader2,
+  CheckCircle2,
+  Clock,
+  Circle,
+  PlayCircle,
+  Download,
+  Trash2,
+  Battery,
   Cpu,
   Zap,
-  ShieldAlert
 } from 'lucide-react'
-import { StatusLeds } from '@/components/ui/tech-pattern'
+import { formatDate, calculateProgress } from '@/lib/utils'
+import { useAuth } from '@/components/auth-provider'
+import { toast } from 'sonner'
+import { CircuitPattern, GlowLine } from '@/components/ui/tech-pattern'
 
-const navigation = [
-  { name: 'Ana Sayfa', href: '/dashboard', icon: LayoutDashboard, roles: ['ADMIN', 'OPERATOR', 'QUALITY'] },
-  { name: 'Batarya Kutuları', href: '/battery-boxes', icon: Box, roles: ['ADMIN', 'OPERATOR', 'QUALITY'] },
-  { name: 'Uygunsuzluklar', href: '/defects', icon: ShieldAlert, roles: ['ADMIN', 'QUALITY'] },
-]
+interface Question {
+  id: string
+  questionText: string
+  questionType: 'YES_NO' | 'TEXT' | 'NUMBER'
+  required: boolean
+  displayOrder: number
+}
 
-const adminNavigation = [
-  { name: 'Prosesler', href: '/admin/processes', icon: Cog },
-  { name: 'Kontrol Listeleri', href: '/admin/checklists', icon: ClipboardList },
-  { name: 'Kullanıcılar', href: '/admin/users', icon: Users },
-]
+interface Answer {
+  id: string
+  questionId: string
+  answer: string
+  answeredAt: string
+  answeredBy: {
+    id: string
+    name: string
+    email: string
+  }
+}
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading, logout } = useAuth()
+interface BatteryBoxProcess {
+  id: string
+  processId: string
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED'
+  displayOrder: number
+  startedAt: string | null
+  completedAt: string | null
+  process: {
+    id: string
+    name: string
+    description: string | null
+  }
+  checklistTemplate: {
+    id: string
+    name: string
+    questions: Question[]
+  } | null
+  answers: Answer[]
+}
+
+interface BatteryBox {
+  id: string
+  serialNumber: string
+  status: 'IN_PROGRESS' | 'COMPLETED'
+  notes: string | null
+  createdAt: string
+  completedAt: string | null
+  processes: BatteryBoxProcess[]
+}
+
+export default function BatteryBoxDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const resolvedParams = use(params)
   const router = useRouter()
-  const pathname = usePathname()
+  const { user } = useAuth()
+
+  const [batteryBox, setBatteryBox] = useState<BatteryBox | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [activeProcess, setActiveProcess] = useState<string | null>(null)
+  const [answers, setAnswers] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login')
+    fetchBatteryBox()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedParams.id])
+
+  async function fetchBatteryBox() {
+    try {
+      const res = await fetch('/api/battery-boxes/' + resolvedParams.id)
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setBatteryBox(data)
+
+      const inProgress = data.processes.find(
+        (p: BatteryBoxProcess) => p.status === 'IN_PROGRESS',
+      )
+      const pending = data.processes.find(
+        (p: BatteryBoxProcess) => p.status === 'PENDING' && p.checklistTemplate,
+      )
+
+      if (inProgress) {
+        setActiveProcess(inProgress.processId)
+        initializeAnswers(inProgress)
+      } else if (pending) {
+        setActiveProcess(pending.processId)
+      }
+    } catch {
+      toast.error('Battery box not found')
+      router.push('/battery-boxes')
+    } finally {
+      setLoading(false)
     }
-  }, [user, loading, router])
+  }
+
+  function initializeAnswers(process: BatteryBoxProcess) {
+    const initial: Record<string, string> = {}
+    process.answers.forEach((a) => {
+      initial[a.questionId] = a.answer
+    })
+    setAnswers(initial)
+  }
+
+  function handleAnswerChange(questionId: string, value: string) {
+    setAnswers((prev) => ({ ...prev, [questionId]: value }))
+  }
+
+  async function handleSaveAnswers() {
+    if (!activeProcess) return
+    const process = batteryBox?.processes.find(
+      (p) => p.processId === activeProcess,
+    )
+    if (!process?.checklistTemplate) return
+
+    setSaving(true)
+    try {
+      const payload = Object.entries(answers)
+        .filter(([, v]) => v)
+        .map(([questionId, answer]) => ({ questionId, answer }))
+
+      const res = await fetch(
+        `/api/battery-boxes/${resolvedParams.id}/processes/${activeProcess}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ answers: payload }),
+        },
+      )
+
+      if (!res.ok) throw new Error()
+      await fetchBatteryBox()
+      toast.success('Answers saved')
+    } catch {
+      toast.error('Failed to save answers')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function handleExport(processId: string) {
+    window.open(
+      `/api/battery-boxes/${resolvedParams.id}/processes/${processId}/export`,
+      '_blank',
+    )
+  }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-500 mx-auto" />
-          <p className="mt-3 text-slate-400 text-sm">Loading system...</p>
-        </div>
+      <div className='flex justify-center py-20'>
+        <Loader2 className='h-8 w-8 animate-spin text-emerald-500' />
       </div>
     )
   }
 
-  if (!user) {
-    return null
-  }
+  if (!batteryBox) return null
 
-  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
+  const currentProcess = batteryBox.processes.find(
+    (p) => p.processId === activeProcess,
+  )
+  const completed = batteryBox.processes.filter(
+    (p) => p.status === 'COMPLETED',
+  ).length
+  const progress = calculateProgress(completed, batteryBox.processes.length)
 
   return (
-    <div className="min-h-screen bg-slate-100">
-      {/* Top Navigation */}
-      <header className="bg-slate-900 border-b border-slate-800 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            {/* TEMSA Logo */}
-            <Link href="/dashboard" className="flex items-center gap-3">
-              <div className="relative">
-                <div className="w-12 h-12 bg-gradient-to-br from-[#0066B3] to-[#004080] rounded-lg flex items-center justify-center border border-blue-400/30">
-                  <span className="text-white font-bold text-sm tracking-tight">TEMSA</span>
-                </div>
-                <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-slate-800 rounded flex items-center justify-center border border-emerald-500/50">
-                  <Zap className="w-2 h-2 text-emerald-400" />
-                </div>
-              </div>
-              <div>
-                <span className="font-bold text-lg text-white">TrackBat</span>
-                <div className="flex items-center gap-1">
-                  <Cpu className="w-2.5 h-2.5 text-emerald-400" />
-                  <span className="text-[10px] text-emerald-400 font-mono">ONLINE</span>
-                </div>
-              </div>
+    <div className='space-y-6'>
+      {/* HEADER */}
+      <div className='relative rounded-xl bg-slate-900 p-6 overflow-hidden'>
+        <CircuitPattern className='absolute inset-0 opacity-10 text-emerald-500' />
+        <GlowLine position='top' color='cyan' />
+
+        <div className='relative flex items-center justify-between'>
+          <div className='flex items-center gap-4'>
+            <Link href='/battery-boxes'>
+              <Button
+                size='icon'
+                variant='ghost'
+                className='text-slate-400 hover:text-white hover:bg-slate-800'
+              >
+                <ArrowLeft />
+              </Button>
             </Link>
-
-            {/* Main Navigation */}
-            <nav className="hidden md:flex items-center gap-1">
-              {navigation
-                .filter(item => item.roles.includes(user.role))
-                .map((item) => (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      isActive(item.href)
-                        ? 'bg-[#0066B3] text-white'
-                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                    }`}
-                  >
-                    <item.icon className="h-4 w-4" />
-                    {item.name}
-                  </Link>
-                ))}
-              
-              {/* Admin Dropdown */}
-              {user.role === 'ADMIN' && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button 
-                      variant="ghost"
-                      className={`gap-2 ${
-                        pathname.startsWith('/admin') 
-                          ? 'bg-[#0066B3] text-white hover:bg-[#004080] hover:text-white' 
-                          : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                      }`}
-                    >
-                      <Settings className="h-4 w-4" />
-                      Yönetim
-                      <ChevronDown className="h-3 w-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700">
-                    {adminNavigation.map((item) => (
-                      <DropdownMenuItem key={item.name} asChild>
-                        <Link href={item.href} className="flex items-center gap-2 cursor-pointer text-slate-200 focus:bg-slate-700 focus:text-white">
-                          <item.icon className="h-4 w-4" />
-                          {item.name}
-                        </Link>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-            </nav>
-
-            {/* Right Side - Status + User */}
-            <div className="flex items-center gap-4">
-              <StatusLeds />
-              
-              {/* User Menu */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="gap-2 text-slate-300 hover:bg-slate-800 hover:text-white">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#0066B3] to-cyan-600 flex items-center justify-center font-medium text-white">
-                      {user.name.charAt(0).toUpperCase()}
-                    </div>
-                    <span className="hidden sm:inline">{user.name}</span>
-                    <ChevronDown className="h-3 w-3" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700">
-                  <div className="px-2 py-1.5 text-sm">
-                    <div className="font-medium text-white">{user.name}</div>
-                    <div className="text-slate-400 text-xs">{user.email}</div>
-                    <div className="text-xs mt-1">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                        user.role === 'ADMIN' 
-                          ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' 
-                          : user.role === 'QUALITY'
-                          ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                      }`}>
-                        {user.role === 'ADMIN' ? 'YÖNETİCİ' : user.role === 'QUALITY' ? 'KALİTE' : 'OPERATÖR'}
-                      </span>
-                    </div>
-                  </div>
-                  <DropdownMenuSeparator className="bg-slate-700" />
-                  <DropdownMenuItem onClick={logout} className="text-red-400 cursor-pointer focus:bg-slate-700 focus:text-red-400">
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Çıkış Yap
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+            <div>
+              <h1 className='text-2xl font-bold text-white'>
+                {batteryBox.serialNumber}
+              </h1>
+              <p className='text-slate-400 text-sm'>
+                Created {formatDate(batteryBox.createdAt)}
+              </p>
             </div>
           </div>
-        </div>
-      </header>
 
-      {/* Mobile Navigation */}
-      <nav className="md:hidden bg-slate-800 border-b border-slate-700 px-4 py-2 overflow-x-auto">
-        <div className="flex gap-2">
-          {navigation
-            .filter(item => item.roles.includes(user.role))
-            .map((item) => (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap ${
-                  isActive(item.href)
-                    ? 'bg-emerald-600 text-white'
-                    : 'text-slate-300 bg-slate-700'
-                }`}
-              >
-                <item.icon className="h-4 w-4" />
-                {item.name}
-              </Link>
-            ))}
-          {user.role === 'ADMIN' && adminNavigation.map((item) => (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap ${
-                isActive(item.href)
-                  ? 'bg-emerald-600 text-white'
-                  : 'text-slate-300 bg-slate-700'
-              }`}
+          {activeProcess && (
+            <Button
+              onClick={() => handleExport(activeProcess)}
+              className='bg-emerald-600 hover:bg-emerald-700'
             >
-              <item.icon className="h-4 w-4" />
-              {item.name}
-            </Link>
-          ))}
+              <Download className='mr-2 h-4 w-4' />
+              Download Excel
+            </Button>
+          )}
         </div>
-      </nav>
+      </div>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {children}
-      </main>
+      {/* PROGRESS */}
+      <Card>
+        <CardContent className='pt-6'>
+          <div className='flex justify-between text-sm mb-2'>
+            <span>Progress</span>
+            <span>
+              {completed}/{batteryBox.processes.length}
+            </span>
+          </div>
+          <div className='h-3 bg-slate-100 rounded-full overflow-hidden'>
+            <div
+              className='h-full bg-emerald-500 transition-all'
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* CHECKLIST */}
+      {currentProcess?.checklistTemplate && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{currentProcess.process.name}</CardTitle>
+            <CardDescription>
+              {currentProcess.checklistTemplate.name}
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className='space-y-6'>
+            {currentProcess.checklistTemplate?.questions.map((q, i) => {
+              const value = answers[q.id] || ''
+
+              return (
+                <div key={q.id} className='space-y-3'>
+                  <div className='flex gap-3'>
+                    <span className='w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-sm font-semibold shrink-0'>
+                      {i + 1}
+                    </span>
+                    <div className='flex-1'>
+                      <p className='font-medium text-slate-900'>
+                        {q.questionText}
+                      </p>
+                      {q.required && (
+                        <span className='text-xs text-red-500 mt-1 block'>
+                          Required
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className='ml-11 space-y-3'>
+                    {/* Text/Number Input */}
+                    <input
+                      type={q.questionType === 'NUMBER' ? 'number' : 'text'}
+                      value={
+                        value === 'AÇIK' || value === 'RED' || value === 'KABUL'
+                          ? ''
+                          : value
+                      }
+                      onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+                      placeholder='Enter your answer or measurement...'
+                      disabled={
+                        value === 'AÇIK' || value === 'RED' || value === 'KABUL'
+                      }
+                      className='w-full h-11 px-4 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:bg-slate-50 disabled:text-slate-500'
+                    />
+
+                    {/* Three Buttons */}
+                    <div className='flex gap-2'>
+                      <Button
+                        type='button'
+                        size='sm'
+                        variant={value === 'AÇIK' ? 'default' : 'outline'}
+                        onClick={() => handleAnswerChange(q.id, 'AÇIK')}
+                        className={
+                          value === 'AÇIK'
+                            ? 'bg-blue-600 hover:bg-blue-700'
+                            : 'hover:bg-blue-50'
+                        }
+                      >
+                        AÇIK
+                      </Button>
+                      <Button
+                        type='button'
+                        size='sm'
+                        variant={value === 'RED' ? 'default' : 'outline'}
+                        onClick={() => handleAnswerChange(q.id, 'RED')}
+                        className={
+                          value === 'RED'
+                            ? 'bg-red-600 hover:bg-red-700'
+                            : 'hover:bg-red-50'
+                        }
+                      >
+                        RED
+                      </Button>
+                      <Button
+                        type='button'
+                        size='sm'
+                        variant={value === 'KABUL' ? 'default' : 'outline'}
+                        onClick={() => handleAnswerChange(q.id, 'KABUL')}
+                        className={
+                          value === 'KABUL'
+                            ? 'bg-emerald-600 hover:bg-emerald-700'
+                            : 'hover:bg-emerald-50'
+                        }
+                      >
+                        KABUL
+                      </Button>
+                    </div>
+                  </div>
+
+                  {i <
+                    (currentProcess.checklistTemplate?.questions.length ?? 0) -
+                      1 && <Separator className='ml-11 mt-4' />}
+                </div>
+              )
+            })}
+
+            <div className='flex gap-3 pt-4'>
+              <Button
+                onClick={handleSaveAnswers}
+                disabled={saving}
+                className='bg-emerald-600 hover:bg-emerald-700'
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Answers'
+                )}
+              </Button>
+              {activeProcess && (
+                <Button
+                  onClick={() => handleExport(activeProcess)}
+                  variant='outline'
+                >
+                  <Download className='mr-2 h-4 w-4' />
+                  Download Excel
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
