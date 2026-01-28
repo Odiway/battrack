@@ -105,7 +105,11 @@ export default function BatteryBoxDetailPage({
   const [loading, setLoading] = useState(true)
   const [activeProcess, setActiveProcess] = useState<string | null>(null)
   const [answers, setAnswers] = useState<Record<string, string>>({})
+  const [buttonSelections, setButtonSelections] = useState<
+    Record<string, string>
+  >({})
   const [saving, setSaving] = useState(false)
+  const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
     fetchBatteryBox()
@@ -142,14 +146,54 @@ export default function BatteryBoxDetailPage({
 
   function initializeAnswers(process: BatteryBoxProcess) {
     const initial: Record<string, string> = {}
+    const buttons: Record<string, string> = {}
     process.answers.forEach((a) => {
       initial[a.questionId] = a.answer
+      // Check if answer is one of the button values
+      if (['AÇIK', 'RED', 'KABUL'].includes(a.answer)) {
+        buttons[a.questionId] = a.answer
+      }
     })
     setAnswers(initial)
+    setButtonSelections(buttons)
   }
 
   function handleAnswerChange(questionId: string, value: string) {
     setAnswers((prev) => ({ ...prev, [questionId]: value }))
+  }
+
+  function handleButtonSelect(questionId: string, buttonValue: string) {
+    setButtonSelections((prev) => ({ ...prev, [questionId]: buttonValue }))
+  }
+
+  async function handleDownloadExcel() {
+    if (!batteryBox) return
+
+    setDownloading(true)
+    try {
+      const res = await fetch(
+        `/api/battery-boxes/${resolvedParams.id}/export`,
+        { method: 'GET' },
+      )
+
+      if (!res.ok) throw new Error()
+
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${batteryBox.serialNumber}_report.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      toast.success('Excel downloaded successfully')
+    } catch {
+      toast.error('Failed to download Excel')
+    } finally {
+      setDownloading(false)
+    }
   }
 
   async function handleSaveAnswers() {
@@ -163,7 +207,11 @@ export default function BatteryBoxDetailPage({
     try {
       const payload = Object.entries(answers)
         .filter(([, v]) => v)
-        .map(([questionId, answer]) => ({ questionId, answer }))
+        .map(([questionId, answer]) => ({
+          questionId,
+          answer,
+          buttonSelection: buttonSelections[questionId] || null,
+        }))
 
       const res = await fetch(
         `/api/battery-boxes/${resolvedParams.id}/processes/${activeProcess}`,
@@ -209,20 +257,40 @@ export default function BatteryBoxDetailPage({
         <CircuitPattern className='absolute inset-0 opacity-10 text-emerald-500' />
         <GlowLine position='top' color='cyan' />
 
-        <div className='relative flex items-center gap-4'>
-          <Link href='/battery-boxes'>
-            <Button size='icon' variant='ghost'>
-              <ArrowLeft />
-            </Button>
-          </Link>
-          <div>
-            <h1 className='text-2xl font-bold text-white'>
-              {batteryBox.serialNumber}
-            </h1>
-            <p className='text-slate-400 text-sm'>
-              Created {formatDate(batteryBox.createdAt)}
-            </p>
+        <div className='relative flex items-center justify-between'>
+          <div className='flex items-center gap-4'>
+            <Link href='/battery-boxes'>
+              <Button size='icon' variant='ghost'>
+                <ArrowLeft />
+              </Button>
+            </Link>
+            <div>
+              <h1 className='text-2xl font-bold text-white'>
+                {batteryBox.serialNumber}
+              </h1>
+              <p className='text-slate-400 text-sm'>
+                Created {formatDate(batteryBox.createdAt)}
+              </p>
+            </div>
           </div>
+
+          <Button
+            onClick={handleDownloadExcel}
+            disabled={downloading}
+            className='bg-emerald-600 hover:bg-emerald-700'
+          >
+            {downloading ? (
+              <>
+                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                Downloading...
+              </>
+            ) : (
+              <>
+                <Download className='mr-2 h-4 w-4' />
+                Download Excel
+              </>
+            )}
+          </Button>
         </div>
       </div>
 
@@ -257,53 +325,126 @@ export default function BatteryBoxDetailPage({
           <CardContent className='space-y-6'>
             {currentProcess.checklistTemplate?.questions.map((q, i) => {
               const value = answers[q.id] || ''
+              const selectedButton = buttonSelections[q.id] || ''
 
               return (
                 <div key={q.id} className='space-y-3'>
                   <div className='flex gap-3'>
-                    <span className='w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-sm'>
+                    <span className='w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-sm font-semibold shrink-0'>
                       {i + 1}
                     </span>
-                    <p className='font-medium'>{q.questionText}</p>
+                    <div className='flex-1'>
+                      <p className='font-medium text-slate-900'>
+                        {q.questionText}
+                      </p>
+                      {q.required && (
+                        <span className='text-xs text-red-500 mt-1 block'>
+                          Required
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  <div className='ml-9'>
-                    {q.questionType === 'YES_NO' ? (
-                      <>
-                        <div className='flex gap-2'>
-                          {['KABUL', 'RED', 'OPEN'].map((v) => (
-                            <Button
-                              key={v}
-                              variant={value === v ? 'default' : 'outline'}
-                              onClick={() => handleAnswerChange(q.id, v)}
-                            >
-                              {v}
-                            </Button>
-                          ))}
-                        </div>
-                      </>
-                    ) : (
-                      <input
-                        type={q.questionType === 'NUMBER' ? 'number' : 'text'}
-                        value={value}
-                        onChange={(e) =>
-                          handleAnswerChange(q.id, e.target.value)
+                  <div className='ml-11 space-y-3'>
+                    {/* Text/Number Input */}
+                    <input
+                      type={q.questionType === 'NUMBER' ? 'number' : 'text'}
+                      value={value}
+                      onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+                      placeholder='Enter your answer or measurement...'
+                      className='w-full h-11 px-4 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent'
+                    />
+
+                    {/* Three Buttons */}
+                    <div className='flex gap-2'>
+                      <Button
+                        type='button'
+                        size='sm'
+                        variant={
+                          selectedButton === 'AÇIK' ? 'default' : 'outline'
                         }
-                        className='w-full h-11 px-4 border rounded-lg'
-                      />
-                    )}
+                        onClick={() => handleButtonSelect(q.id, 'AÇIK')}
+                        className={
+                          selectedButton === 'AÇIK'
+                            ? 'bg-blue-600 hover:bg-blue-700'
+                            : ''
+                        }
+                      >
+                        AÇIK
+                      </Button>
+                      <Button
+                        type='button'
+                        size='sm'
+                        variant={
+                          selectedButton === 'RED' ? 'default' : 'outline'
+                        }
+                        onClick={() => handleButtonSelect(q.id, 'RED')}
+                        className={
+                          selectedButton === 'RED'
+                            ? 'bg-red-600 hover:bg-red-700'
+                            : ''
+                        }
+                      >
+                        RED
+                      </Button>
+                      <Button
+                        type='button'
+                        size='sm'
+                        variant={
+                          selectedButton === 'KABUL' ? 'default' : 'outline'
+                        }
+                        onClick={() => handleButtonSelect(q.id, 'KABUL')}
+                        className={
+                          selectedButton === 'KABUL'
+                            ? 'bg-emerald-600 hover:bg-emerald-700'
+                            : ''
+                        }
+                      >
+                        KABUL
+                      </Button>
+                    </div>
                   </div>
 
                   {i <
                     (currentProcess.checklistTemplate?.questions.length ?? 0) -
-                      1 && <Separator className='ml-9' />}
+                      1 && <Separator className='ml-11 mt-4' />}
                 </div>
               )
             })}
 
-            <Button onClick={handleSaveAnswers} disabled={saving}>
-              {saving ? 'Saving...' : 'Save Answers'}
-            </Button>
+            <div className='flex gap-3 pt-4'>
+              <Button
+                onClick={handleSaveAnswers}
+                disabled={saving}
+                className='bg-emerald-600 hover:bg-emerald-700'
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Answers'
+                )}
+              </Button>
+              <Button
+                onClick={handleDownloadExcel}
+                disabled={downloading}
+                variant='outline'
+              >
+                {downloading ? (
+                  <>
+                    <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                    Downloading...
+                  </>
+                ) : (
+                  <>
+                    <Download className='mr-2 h-4 w-4' />
+                    Download Excel
+                  </>
+                )}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
