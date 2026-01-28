@@ -60,7 +60,9 @@ export default function ChecklistsPage() {
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [viewDialogOpen, setViewDialogOpen] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<ChecklistTemplate | null>(null)
+  const [viewingTemplate, setViewingTemplate] = useState<ChecklistTemplate | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   // Form state
@@ -103,6 +105,11 @@ export default function ChecklistsPage() {
       required: q.required,
     })))
     setDialogOpen(true)
+  }
+
+  function handleView(template: ChecklistTemplate) {
+    setViewingTemplate(template)
+    setViewDialogOpen(true)
   }
 
   function addQuestion() {
@@ -335,6 +342,119 @@ export default function ChecklistsPage() {
         </div>
       </div>
 
+      {/* View Checklist Dialog */}
+      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              <div className="bg-cyan-100 p-2 rounded-lg">
+                <ClipboardList className="h-5 w-5 text-cyan-600" />
+              </div>
+              {viewingTemplate?.name}
+            </DialogTitle>
+            {viewingTemplate?.description && (
+              <p className="text-slate-600 text-left">{viewingTemplate.description}</p>
+            )}
+          </DialogHeader>
+          
+          {viewingTemplate && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b">
+                <span className="text-sm font-medium text-slate-500">
+                  {viewingTemplate.questions.length} Questions
+                </span>
+                <Badge variant="outline" className="border-slate-300">
+                  {viewingTemplate.active ? 'Active' : 'Inactive'}
+                </Badge>
+              </div>
+              
+              <div className="space-y-4">
+                {viewingTemplate.questions
+                  .sort((a, b) => a.displayOrder - b.displayOrder)
+                  .map((question, index) => (
+                  <div key={question.id} className="p-4 border rounded-lg bg-slate-50">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 bg-cyan-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-sm font-semibold text-cyan-600">
+                          {index + 1}
+                        </span>
+                      </div>
+                      <div className="flex-1 space-y-2">
+                        <p className="font-medium text-slate-800">
+                          {question.questionText}
+                          {question.required && (
+                            <span className="text-red-500 ml-1">*</span>
+                          )}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Badge 
+                            variant="secondary" 
+                            className="text-xs bg-slate-200 text-slate-700"
+                          >
+                            {question.questionType === 'YES_NO' ? 'Yes / No' : 
+                             question.questionType === 'NUMBER' ? 'Number' : 'Text'}
+                          </Badge>
+                          {question.required ? (
+                            <Badge variant="destructive" className="text-xs">
+                              Required
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-xs border-slate-300">
+                              Optional
+                            </Badge>
+                          )}
+                        </div>
+                        
+                        {/* Example input based on question type */}
+                        <div className="pt-2">
+                          {question.questionType === 'YES_NO' && (
+                            <div className="flex items-center gap-4">
+                              <label className="flex items-center gap-2 text-sm">
+                                <input type="radio" name={`example-${question.id}`} className="w-4 h-4" disabled />
+                                Evet
+                              </label>
+                              <label className="flex items-center gap-2 text-sm">
+                                <input type="radio" name={`example-${question.id}`} className="w-4 h-4" disabled />
+                                Hayır
+                              </label>
+                            </div>
+                          )}
+                          {question.questionType === 'NUMBER' && (
+                            <input 
+                              type="number" 
+                              placeholder="Sayı giriniz..." 
+                              className="w-32 p-2 border border-slate-300 rounded text-sm bg-white"
+                              disabled
+                            />
+                          )}
+                          {question.questionType === 'TEXT' && (
+                            <input 
+                              type="text" 
+                              placeholder="Metin giriniz..." 
+                              className="w-full p-2 border border-slate-300 rounded text-sm bg-white"
+                              disabled
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="pt-4 border-t">
+                <Button 
+                  onClick={() => setViewDialogOpen(false)}
+                  className="w-full bg-cyan-600 hover:bg-cyan-700"
+                >
+                  Kapat
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {templates.length === 0 ? (
         <Card className="border-slate-200">
           <CardContent className="py-12 text-center">
@@ -350,7 +470,8 @@ export default function ChecklistsPage() {
       ) : (
         <div className="grid gap-4">
           {templates.map((template) => (
-            <Card key={template.id} className="border-slate-200 hover:border-cyan-200 transition-colors">
+            <Card key={template.id} className="border-slate-200 hover:border-cyan-200 transition-colors cursor-pointer" 
+                  onClick={() => handleView(template)}>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -364,7 +485,7 @@ export default function ChecklistsPage() {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                     <Badge variant="outline" className="border-slate-300">
                       {template.questions.length} question{template.questions.length !== 1 ? 's' : ''}
                     </Badge>
@@ -384,7 +505,7 @@ export default function ChecklistsPage() {
                       <span className="text-slate-400">{i + 1}.</span>
                       <span>{q.questionText}</span>
                       <Badge variant="secondary" className="text-xs bg-slate-100 text-slate-600">
-                        {q.questionType === 'YES_NO' ? 'Yes/No' : q.questionType}
+                        {q.questionType === 'YES_NO' ? 'Yes/No' : q.questionType === 'NUMBER' ? 'Number' : 'Text'}
                       </Badge>
                     </div>
                   ))}
