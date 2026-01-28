@@ -11,8 +11,32 @@ import {
   CardTitle,
   CardDescription,
 } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { ArrowLeft, Loader2 } from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import {
+  ArrowLeft,
+  Loader2,
+  CheckCircle2,
+  Clock,
+  Circle,
+  PlayCircle,
+  Download,
+  Trash2,
+  Battery,
+  Cpu,
+  Zap,
+} from 'lucide-react'
 import { formatDate, calculateProgress } from '@/lib/utils'
 import { useAuth } from '@/components/auth-provider'
 import { toast } from 'sonner'
@@ -92,22 +116,21 @@ export default function BatteryBoxDetailPage({
     try {
       const res = await fetch('/api/battery-boxes/' + resolvedParams.id)
       if (!res.ok) throw new Error()
-
-      const data: BatteryBox = await res.json()
+      const data = await res.json()
       setBatteryBox(data)
 
-      const inProgress = data.processes.find((p) => p.status === 'IN_PROGRESS')
+      const inProgress = data.processes.find(
+        (p: BatteryBoxProcess) => p.status === 'IN_PROGRESS',
+      )
       const pending = data.processes.find(
-        (p) => p.status === 'PENDING' && p.checklistTemplate,
+        (p: BatteryBoxProcess) => p.status === 'PENDING' && p.checklistTemplate,
       )
 
-      if (inProgress && inProgress.checklistTemplate) {
+      if (inProgress) {
         setActiveProcess(inProgress.processId)
         initializeAnswers(inProgress)
       } else if (pending) {
         setActiveProcess(pending.processId)
-      } else {
-        setActiveProcess(null)
       }
     } catch {
       toast.error('Battery box not found')
@@ -118,12 +141,10 @@ export default function BatteryBoxDetailPage({
   }
 
   function initializeAnswers(process: BatteryBoxProcess) {
-    if (!process.checklistTemplate) return
-
     const initial: Record<string, string> = {}
-    for (const a of process.answers) {
+    process.answers.forEach((a) => {
       initial[a.questionId] = a.answer
-    }
+    })
     setAnswers(initial)
   }
 
@@ -132,17 +153,16 @@ export default function BatteryBoxDetailPage({
   }
 
   async function handleSaveAnswers() {
-    if (!batteryBox || !activeProcess) return
-
-    const process = batteryBox.processes.find(
+    if (!activeProcess) return
+    const process = batteryBox?.processes.find(
       (p) => p.processId === activeProcess,
     )
-    if (!process || !process.checklistTemplate) return
+    if (!process?.checklistTemplate) return
 
     setSaving(true)
     try {
       const payload = Object.entries(answers)
-        .filter(([, v]) => v !== '')
+        .filter(([, v]) => v)
         .map(([questionId, answer]) => ({ questionId, answer }))
 
       const res = await fetch(
@@ -155,7 +175,6 @@ export default function BatteryBoxDetailPage({
       )
 
       if (!res.ok) throw new Error()
-
       await fetchBatteryBox()
       toast.success('Answers saved')
     } catch {
@@ -175,19 +194,13 @@ export default function BatteryBoxDetailPage({
 
   if (!batteryBox) return null
 
-  const currentProcess = activeProcess
-    ? batteryBox.processes.find((p) => p.processId === activeProcess)
-    : null
-
-  const checklistTemplate = currentProcess?.checklistTemplate ?? null
-
-  const completedCount = batteryBox.processes.filter(
+  const currentProcess = batteryBox.processes.find(
+    (p) => p.processId === activeProcess,
+  )
+  const completed = batteryBox.processes.filter(
     (p) => p.status === 'COMPLETED',
   ).length
-  const progress = calculateProgress(
-    completedCount,
-    batteryBox.processes.length,
-  )
+  const progress = calculateProgress(completed, batteryBox.processes.length)
 
   return (
     <div className='space-y-6'>
@@ -219,7 +232,7 @@ export default function BatteryBoxDetailPage({
           <div className='flex justify-between text-sm mb-2'>
             <span>Progress</span>
             <span>
-              {completedCount}/{batteryBox.processes.length}
+              {completed}/{batteryBox.processes.length}
             </span>
           </div>
           <div className='h-3 bg-slate-100 rounded-full overflow-hidden'>
@@ -232,16 +245,18 @@ export default function BatteryBoxDetailPage({
       </Card>
 
       {/* CHECKLIST */}
-      {currentProcess && checklistTemplate && (
+      {currentProcess?.checklistTemplate && (
         <Card>
           <CardHeader>
             <CardTitle>{currentProcess.process.name}</CardTitle>
-            <CardDescription>{checklistTemplate.name}</CardDescription>
+            <CardDescription>
+              {currentProcess.checklistTemplate.name}
+            </CardDescription>
           </CardHeader>
 
           <CardContent className='space-y-6'>
-            {checklistTemplate.questions.map((q, i) => {
-              const value = answers[q.id] ?? ''
+            {currentProcess.checklistTemplate?.questions.map((q, i) => {
+              const value = answers[q.id] || ''
 
               return (
                 <div key={q.id} className='space-y-3'>
@@ -254,17 +269,19 @@ export default function BatteryBoxDetailPage({
 
                   <div className='ml-9'>
                     {q.questionType === 'YES_NO' ? (
-                      <div className='flex gap-2'>
-                        {['KABUL', 'RED', 'OPEN'].map((v) => (
-                          <Button
-                            key={v}
-                            variant={value === v ? 'default' : 'outline'}
-                            onClick={() => handleAnswerChange(q.id, v)}
-                          >
-                            {v}
-                          </Button>
-                        ))}
-                      </div>
+                      <>
+                        <div className='flex gap-2'>
+                          {['KABUL', 'RED', 'OPEN'].map((v) => (
+                            <Button
+                              key={v}
+                              variant={value === v ? 'default' : 'outline'}
+                              onClick={() => handleAnswerChange(q.id, v)}
+                            >
+                              {v}
+                            </Button>
+                          ))}
+                        </div>
+                      </>
                     ) : (
                       <input
                         type={q.questionType === 'NUMBER' ? 'number' : 'text'}
@@ -277,9 +294,9 @@ export default function BatteryBoxDetailPage({
                     )}
                   </div>
 
-                  {i < checklistTemplate.questions.length - 1 && (
-                    <Separator className='ml-9' />
-                  )}
+                  {i <
+                    (currentProcess.checklistTemplate?.questions.length ?? 0) -
+                      1 && <Separator className='ml-9' />}
                 </div>
               )
             })}
