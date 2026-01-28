@@ -242,9 +242,17 @@ export async function GET(
       const sonucCell = worksheet.getCell(`G${rowIndex}`)
       if (answer) {
         const isPositive = answer.answer.toLowerCase() === 'yes' || answer.answer.toLowerCase() === 'evet'
-        sonucCell.value = isPositive ? 'KABUL' : 'RED'
-        sonucCell.font = { bold: true, size: 10, color: { argb: isPositive ? '008000' : 'FF0000' } }
-        sonucCell.fill = createFill(isPositive ? 'C6EFCE' : 'FFC7CE')
+        const isOpen = answer.answer === 'AÇIK'
+        
+        if (isOpen) {
+          sonucCell.value = 'AÇIK'
+          sonucCell.font = { bold: true, size: 10, color: { argb: 'B45309' } }
+          sonucCell.fill = createFill('FEF3C7')
+        } else {
+          sonucCell.value = isPositive ? 'KABUL' : 'RED'
+          sonucCell.font = { bold: true, size: 10, color: { argb: isPositive ? '008000' : 'FF0000' } }
+          sonucCell.fill = createFill(isPositive ? 'C6EFCE' : 'FFC7CE')
+        }
       } else {
         sonucCell.value = '-'
         sonucCell.font = { size: 10 }
