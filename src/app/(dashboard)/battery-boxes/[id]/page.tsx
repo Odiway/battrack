@@ -471,54 +471,42 @@ export default function BatteryBoxDetailPage({
                           ) : (
                             <div className="ml-9">
                               {question.questionType === 'YES_NO' ? (
-                                <div className="flex gap-2">
-                                  <Button
-                                    type="button"
-                                    variant={currentAnswer === 'Yes' ? 'default' : 'outline'}
-                                    className={`flex-1 h-12 ${currentAnswer === 'Yes' ? 'bg-emerald-600 hover:bg-emerald-700' : 'border-slate-300 hover:bg-slate-50'}`}
-                                    onClick={() => handleAnswerChange(question.id, 'Yes')}
-                                  >
-                                    Evet
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant={currentAnswer === 'No' ? 'default' : 'outline'}
-                                    className={`flex-1 h-12 ${currentAnswer === 'No' ? 'bg-red-600 hover:bg-red-700' : 'border-slate-300 hover:bg-slate-50'}`}
-                                    onClick={() => handleAnswerChange(question.id, 'No')}
-                                  >
-                                    Hayır
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant={currentAnswer === 'AÇIK' ? 'default' : 'outline'}
-                                    className={`h-12 px-4 ${currentAnswer === 'AÇIK' ? 'bg-amber-500 hover:bg-amber-600' : 'border-amber-300 text-amber-600 hover:bg-amber-50'}`}
-                                    onClick={() => handleAnswerChange(question.id, 'AÇIK')}
-                                    title="Soruyu atla ve açık bırak"
-                                  >
-                                    Açık
-                                  </Button>
-                                </div>
-                              ) : (
-                                <div className="flex gap-2">
+                                <div className="flex flex-col gap-2">
                                   <input
                                     type={question.questionType === 'NUMBER' ? 'number' : 'text'}
-                                    value={currentAnswer === 'AÇIK' ? '' : currentAnswer}
+                                    value={currentAnswer === 'AÇIK' || currentAnswer === 'KABUL' || currentAnswer === 'RED' ? '' : currentAnswer}
                                     onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-                                    className="flex-1 h-12 px-4 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                                    placeholder="Cevabınızı girin..."
-                                    disabled={currentAnswer === 'AÇIK'}
+                                    className="w-full h-12 px-4 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                    placeholder="Açıklama, ölçüm, not... (isteğe bağlı)"
+                                    disabled={currentAnswer === 'AÇIK' || currentAnswer === 'KABUL' || currentAnswer === 'RED'}
                                   />
-                                  <Button
-                                    type="button"
-                                    variant={currentAnswer === 'AÇIK' ? 'default' : 'outline'}
-                                    className={`h-12 px-4 ${currentAnswer === 'AÇIK' ? 'bg-amber-500 hover:bg-amber-600' : 'border-amber-300 text-amber-600 hover:bg-amber-50'}`}
-                                    onClick={() => handleAnswerChange(question.id, 'AÇIK')}
-                                    title="Soruyu atla ve açık bırak"
-                                  >
-                                    Açık
-                                  </Button>
+                                  <div className="flex gap-2 pt-2">
+                                    <Button
+                                      type="button"
+                                      variant={currentAnswer === 'KABUL' ? 'default' : 'outline'}
+                                      className={`flex-1 h-12 ${currentAnswer === 'KABUL' ? 'bg-emerald-600 hover:bg-emerald-700' : 'border-emerald-300 text-emerald-700 hover:bg-emerald-50'}`}
+                                      onClick={() => handleAnswerChange(question.id, 'KABUL')}
+                                    >
+                                      KABUL
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant={currentAnswer === 'RED' ? 'default' : 'outline'}
+                                      className={`flex-1 h-12 ${currentAnswer === 'RED' ? 'bg-red-600 hover:bg-red-700' : 'border-red-300 text-red-700 hover:bg-red-50'}`}
+                                      onClick={() => handleAnswerChange(question.id, 'RED')}
+                                    >
+                                      RED
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant={currentAnswer === 'AÇIK' ? 'default' : 'outline'}
+                                      className={`flex-1 h-12 ${currentAnswer === 'AÇIK' ? 'bg-amber-500 hover:bg-amber-600' : 'border-amber-300 text-amber-600 hover:bg-amber-50'}`}
+                                      onClick={() => handleAnswerChange(question.id, 'AÇIK')}
+                                    >
+                                      AÇIK
+                                    </Button>
+                                  </div>
                                 </div>
-                              )}
                             </div>
                           )}
                           
