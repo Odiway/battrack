@@ -2,7 +2,6 @@ import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { neonConfig, Pool as NeonPool } from '@neondatabase/serverless'
 import { Pool as PgPool } from 'pg'
-import ws from 'ws'
 
 // Store pool and client globally to avoid recreating on each request
 const globalForPrisma = globalThis as unknown as {
@@ -13,9 +12,20 @@ const globalForPrisma = globalThis as unknown as {
 const connectionString = process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:51214/template1?sslmode=disable'
 const isNeon = connectionString.includes('neon.tech')
 
-// Configure WebSocket for Neon serverless (required for Node.js environment)
-if (isNeon && typeof globalThis.WebSocket === 'undefined') {
-  neonConfig.webSocketConstructor = ws
+// Configure WebSocket for Neon serverless
+if (isNeon) {
+  neonConfig.useSecureWebSocket = true
+  
+  // Only set WebSocket constructor in Node.js environment (not Edge/Vercel)
+  if (typeof globalThis.WebSocket === 'undefined' && typeof process !== 'undefined') {
+    try {
+      // Dynamic import to avoid bundling issues
+      const ws = require('ws')
+      neonConfig.webSocketConstructor = ws
+    } catch {
+      // ws not available, will use fetch
+    }
+  }
 }
 
 if (!globalForPrisma.pool) {
