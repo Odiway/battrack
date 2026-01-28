@@ -11,9 +11,7 @@ const globalForPrisma = globalThis as unknown as {
 const isProduction = process.env.NODE_ENV === 'production'
 
 // Connection string based on environment
-const connectionString = isProduction
-  ? process.env.DATABASE_URL! // Neon DB connection string
-  : 'postgres://postgres:postgres@localhost:51214/template1?sslmode=disable'
+const connectionString = process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:51214/template1?sslmode=disable'
 
 if (!globalForPrisma.pool) {
   globalForPrisma.pool = new pg.Pool({
@@ -21,7 +19,7 @@ if (!globalForPrisma.pool) {
     max: isProduction ? 10 : 1,
     idleTimeoutMillis: isProduction ? 30000 : 0,
     connectionTimeoutMillis: 10000,
-    ssl: isProduction ? { rejectUnauthorized: true } : undefined,
+    ssl: connectionString.includes('neon.tech') ? { rejectUnauthorized: false } : undefined,
   })
 }
 
