@@ -30,18 +30,18 @@ function createFill(argbColor: string): ExcelJS.Fill {
   return {
     type: 'pattern',
     pattern: 'solid',
-    fgColor: { argb: argbColor }
+    fgColor: { argb: argbColor },
   } as ExcelJS.Fill
 }
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; processId: string }> }
+  { params }: { params: Promise<{ id: string; processId: string }> },
 ) {
   try {
     const { id, processId } = await params
 
-    const batteryBoxProcess = await prisma.batteryBoxProcess.findUnique({
+    const batteryBoxProcess = (await prisma.batteryBoxProcess.findUnique({
       where: {
         batteryBoxId_processId: {
           batteryBoxId: id,
@@ -67,7 +67,7 @@ export async function GET(
           },
         },
       },
-    }) as unknown as BatteryBoxProcessWithRelations | null
+    })) as unknown as BatteryBoxProcessWithRelations | null
 
     if (!batteryBoxProcess) {
       return NextResponse.json({ error: 'Process not found' }, { status: 404 })
@@ -86,14 +86,14 @@ export async function GET(
     const mediumGray = 'D9D9D9'
 
     // Set column widths for TEMSA format
-    worksheet.getColumn(1).width = 5   // NO
-    worksheet.getColumn(2).width = 18  // KONTROL
-    worksheet.getColumn(3).width = 45  // KONTROL AÇIKLAMASI
-    worksheet.getColumn(4).width = 40  // KABUL KRİTERİ
-    worksheet.getColumn(5).width = 18  // EKİPMAN
-    worksheet.getColumn(6).width = 15  // FREKANS
-    worksheet.getColumn(7).width = 12  // SONUÇ
-    worksheet.getColumn(8).width = 25  // AÇIKLAMA
+    worksheet.getColumn(1).width = 5 // NO
+    worksheet.getColumn(2).width = 18 // KONTROL
+    worksheet.getColumn(3).width = 45 // KONTROL AÇIKLAMASI
+    worksheet.getColumn(4).width = 40 // KABUL KRİTERİ
+    worksheet.getColumn(5).width = 18 // EKİPMAN
+    worksheet.getColumn(6).width = 15 // FREKANS
+    worksheet.getColumn(7).width = 12 // SONUÇ
+    worksheet.getColumn(8).width = 25 // AÇIKLAMA
 
     // ===== ROW 1: TEMSA Logo area and Title =====
     worksheet.mergeCells('A1:B3')
@@ -123,10 +123,14 @@ export async function GET(
 
     // Date/Page section
     worksheet.mergeCells('G1:H1')
-    worksheet.getCell('G1').value = `Date / Tarih: ${new Date().toLocaleDateString('tr-TR')}`
+    worksheet.getCell('G1').value =
+      `Date / Tarih: ${new Date().toLocaleDateString('tr-TR')}`
     worksheet.getCell('G1').font = { size: 10 }
     worksheet.getCell('G1').alignment = { horizontal: 'right' }
-    worksheet.getCell('G1').border = { top: { style: 'thin' }, right: { style: 'thin' } }
+    worksheet.getCell('G1').border = {
+      top: { style: 'thin' },
+      right: { style: 'thin' },
+    }
 
     worksheet.mergeCells('G2:H2')
     worksheet.getCell('G2').value = 'Page / Sayfa: 1'
@@ -135,23 +139,42 @@ export async function GET(
     worksheet.getCell('G2').border = { right: { style: 'thin' } }
 
     worksheet.mergeCells('G3:H3')
-    worksheet.getCell('G3').border = { bottom: { style: 'thin' }, right: { style: 'thin' } }
+    worksheet.getCell('G3').border = {
+      bottom: { style: 'thin' },
+      right: { style: 'thin' },
+    }
 
     // ===== ROW 4: Info row =====
     worksheet.getCell('A4').value = 'PARÇA NO:'
-    worksheet.getCell('A4').font = { bold: true, size: 9, color: { argb: temsaBlue } }
+    worksheet.getCell('A4').font = {
+      bold: true,
+      size: 9,
+      color: { argb: temsaBlue },
+    }
     worksheet.getCell('B4').value = batteryBoxProcess.batteryBox.serialNumber
     worksheet.getCell('B4').font = { size: 9 }
 
     worksheet.getCell('C4').value = 'PROJE ADI:'
-    worksheet.getCell('C4').font = { bold: true, size: 9, color: { argb: temsaBlue } }
+    worksheet.getCell('C4').font = {
+      bold: true,
+      size: 9,
+      color: { argb: temsaBlue },
+    }
     worksheet.getCell('D4').value = batteryBoxProcess.process.name
     worksheet.getCell('D4').font = { size: 9 }
 
     worksheet.getCell('E4').value = 'DURUM:'
-    worksheet.getCell('E4').font = { bold: true, size: 9, color: { argb: temsaBlue } }
-    worksheet.getCell('F4').value = batteryBoxProcess.status === 'COMPLETED' ? 'TAMAMLANDI' : 
-                                    batteryBoxProcess.status === 'IN_PROGRESS' ? 'DEVAM EDİYOR' : 'BEKLEMEDE'
+    worksheet.getCell('E4').font = {
+      bold: true,
+      size: 9,
+      color: { argb: temsaBlue },
+    }
+    worksheet.getCell('F4').value =
+      batteryBoxProcess.status === 'COMPLETED'
+        ? 'TAMAMLANDI'
+        : batteryBoxProcess.status === 'IN_PROGRESS'
+          ? 'DEVAM EDİYOR'
+          : 'BEKLEMEDE'
     worksheet.getCell('F4').font = { size: 9 }
 
     // Apply border to row 4
@@ -166,14 +189,27 @@ export async function GET(
 
     // ===== ROW 5: Table Header =====
     const headerRow = 5
-    const headers = ['NO', 'KONTROL', 'KONTROL AÇIKLAMASI', 'KABUL KRİTERİ', 'EKİPMAN', 'FREKANS', 'SONUÇ', 'AÇIKLAMA']
-    
+    const headers = [
+      'NO',
+      'KONTROL',
+      'KONTROL AÇIKLAMASI',
+      'KABUL KRİTERİ',
+      'EKİPMAN',
+      'FREKANS',
+      'SONUÇ',
+      'AÇIKLAMA',
+    ]
+
     headers.forEach((header, index) => {
       const cell = worksheet.getCell(headerRow, index + 1)
       cell.value = header
       cell.font = { bold: true, size: 10, color: { argb: temsaBlue } }
       cell.fill = createFill(mediumGray)
-      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+      cell.alignment = {
+        horizontal: 'center',
+        vertical: 'middle',
+        wrapText: true,
+      }
       cell.border = {
         top: { style: 'thin' },
         left: { style: 'thin' },
@@ -191,66 +227,122 @@ export async function GET(
 
     // Group questions by control type (detect from question text)
     questions.forEach((question, index) => {
-      const answer = batteryBoxProcess.answers.find(a => a.questionId === question.id)
-      
+      const answer = batteryBoxProcess.answers.find(
+        (a) => a.questionId === question.id,
+      )
+
       // Determine control category based on question content
       let kontrolType = 'GENEL KONTROL'
       const qText = question.questionText.toLowerCase()
-      if (qText.includes('görsel') || qText.includes('çizik') || qText.includes('darbe') || qText.includes('çatlak')) {
+      if (
+        qText.includes('görsel') ||
+        qText.includes('çizik') ||
+        qText.includes('darbe') ||
+        qText.includes('çatlak')
+      ) {
         kontrolType = 'GÖRSEL KONTROL'
-      } else if (qText.includes('montaj') || qText.includes('civata') || qText.includes('vida')) {
+      } else if (
+        qText.includes('montaj') ||
+        qText.includes('civata') ||
+        qText.includes('vida')
+      ) {
         kontrolType = 'MONTAJ KONTROL'
-      } else if (qText.includes('elektrik') || qText.includes('voltaj') || qText.includes('sensör') || qText.includes('kablo')) {
+      } else if (
+        qText.includes('elektrik') ||
+        qText.includes('voltaj') ||
+        qText.includes('sensör') ||
+        qText.includes('kablo')
+      ) {
         kontrolType = 'ELEKTRİKSEL KONTROL'
-      } else if (qText.includes('test') || qText.includes('ölçüm') || qText.includes('basınç')) {
+      } else if (
+        qText.includes('test') ||
+        qText.includes('ölçüm') ||
+        qText.includes('basınç')
+      ) {
         kontrolType = 'TEST KONTROL'
-      } else if (qText.includes('etiket') || qText.includes('barkod') || qText.includes('kod')) {
+      } else if (
+        qText.includes('etiket') ||
+        qText.includes('barkod') ||
+        qText.includes('kod')
+      ) {
         kontrolType = 'ÜRÜN KOD KONTROL'
       }
 
       // NO column
       worksheet.getCell(`A${rowIndex}`).value = index + 1
-      worksheet.getCell(`A${rowIndex}`).alignment = { horizontal: 'center', vertical: 'middle' }
-      
+      worksheet.getCell(`A${rowIndex}`).alignment = {
+        horizontal: 'center',
+        vertical: 'middle',
+      }
+
       // KONTROL column
       worksheet.getCell(`B${rowIndex}`).value = kontrolType
-      worksheet.getCell(`B${rowIndex}`).font = { size: 9, color: { argb: temsaBlue } }
-      worksheet.getCell(`B${rowIndex}`).alignment = { vertical: 'middle', wrapText: true }
-      
+      worksheet.getCell(`B${rowIndex}`).font = {
+        size: 9,
+        color: { argb: temsaBlue },
+      }
+      worksheet.getCell(`B${rowIndex}`).alignment = {
+        vertical: 'middle',
+        wrapText: true,
+      }
+
       // KONTROL AÇIKLAMASI column
       worksheet.getCell(`C${rowIndex}`).value = question.questionText
-      worksheet.getCell(`C${rowIndex}`).alignment = { vertical: 'middle', wrapText: true }
+      worksheet.getCell(`C${rowIndex}`).alignment = {
+        vertical: 'middle',
+        wrapText: true,
+      }
       worksheet.getCell(`C${rowIndex}`).font = { size: 9 }
-      
+
       // KABUL KRİTERİ column
-      const isYesNo = question.questionText.toLowerCase().includes('mı') || question.questionText.toLowerCase().includes('mu')
-      worksheet.getCell(`D${rowIndex}`).value = isYesNo ? 'Evet/Hayır onayı gerekli' : 'Spesifikasyona uygun olmalı'
-      worksheet.getCell(`D${rowIndex}`).alignment = { vertical: 'middle', wrapText: true }
+      const isYesNo =
+        question.questionText.toLowerCase().includes('mı') ||
+        question.questionText.toLowerCase().includes('mu')
+      worksheet.getCell(`D${rowIndex}`).value = isYesNo
+        ? 'Evet/Hayır onayı gerekli'
+        : 'Spesifikasyona uygun olmalı'
+      worksheet.getCell(`D${rowIndex}`).alignment = {
+        vertical: 'middle',
+        wrapText: true,
+      }
       worksheet.getCell(`D${rowIndex}`).font = { size: 9 }
-      
+
       // EKİPMAN column
       worksheet.getCell(`E${rowIndex}`).value = 'GÖZ'
-      worksheet.getCell(`E${rowIndex}`).alignment = { horizontal: 'center', vertical: 'middle' }
+      worksheet.getCell(`E${rowIndex}`).alignment = {
+        horizontal: 'center',
+        vertical: 'middle',
+      }
       worksheet.getCell(`E${rowIndex}`).font = { size: 9 }
-      
+
       // FREKANS column
       worksheet.getCell(`F${rowIndex}`).value = 'HER SEVKİYATTA\nTÜM MALZEMELER'
-      worksheet.getCell(`F${rowIndex}`).alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+      worksheet.getCell(`F${rowIndex}`).alignment = {
+        horizontal: 'center',
+        vertical: 'middle',
+        wrapText: true,
+      }
       worksheet.getCell(`F${rowIndex}`).font = { size: 8 }
-      
+
       // SONUÇ column - with color coding
       const sonucCell = worksheet.getCell(`G${rowIndex}`)
       if (answer) {
-        const isPositive = answer.answer.toLowerCase() === 'yes' || answer.answer.toLowerCase() === 'evet'
+        const isPositive =
+          answer.answer.toLowerCase() === 'yes' ||
+          answer.answer.toLowerCase() === 'evet'
         const isOpen = answer.answer === 'AÇIK'
-        
+
         if (isOpen) {
           sonucCell.value = 'AÇIK'
           sonucCell.font = { bold: true, size: 10, color: { argb: 'B45309' } }
           sonucCell.fill = createFill('FEF3C7')
         } else {
           sonucCell.value = isPositive ? 'KABUL' : 'RED'
-          sonucCell.font = { bold: true, size: 10, color: { argb: isPositive ? '008000' : 'FF0000' } }
+          sonucCell.font = {
+            bold: true,
+            size: 10,
+            color: { argb: isPositive ? '008000' : 'FF0000' },
+          }
           sonucCell.fill = createFill(isPositive ? 'C6EFCE' : 'FFC7CE')
         }
       } else {
@@ -258,12 +350,15 @@ export async function GET(
         sonucCell.font = { size: 10 }
       }
       sonucCell.alignment = { horizontal: 'center', vertical: 'middle' }
-      
+
       // AÇIKLAMA column
-      worksheet.getCell(`H${rowIndex}`).value = answer?.answeredBy?.name 
+      worksheet.getCell(`H${rowIndex}`).value = answer?.answeredBy?.name
         ? `${answer.answeredBy.name} - ${new Date(answer.answeredAt).toLocaleDateString('tr-TR')}`
         : ''
-      worksheet.getCell(`H${rowIndex}`).alignment = { vertical: 'middle', wrapText: true }
+      worksheet.getCell(`H${rowIndex}`).alignment = {
+        vertical: 'middle',
+        wrapText: true,
+      }
       worksheet.getCell(`H${rowIndex}`).font = { size: 8 }
 
       // Apply borders and alternating row colors
@@ -276,7 +371,8 @@ export async function GET(
           right: { style: 'thin' },
         }
         // Alternating row color
-        if (index % 2 === 1 && col !== 7) { // Skip SONUÇ column for fill
+        if (index % 2 === 1 && col !== 7) {
+          // Skip SONUÇ column for fill
           cell.fill = createFill(lightGray)
         }
       }
@@ -292,16 +388,25 @@ export async function GET(
     worksheet.mergeCells(`A${rowIndex}:B${rowIndex}`)
     worksheet.getCell(`A${rowIndex}`).value = 'HAZIRLAYAN'
     worksheet.getCell(`A${rowIndex}`).font = { bold: true, size: 10 }
-    worksheet.getCell(`A${rowIndex}`).alignment = { horizontal: 'center', vertical: 'middle' }
+    worksheet.getCell(`A${rowIndex}`).alignment = {
+      horizontal: 'center',
+      vertical: 'middle',
+    }
     worksheet.getCell(`A${rowIndex}`).fill = createFill(mediumGray)
-    
+
     worksheet.mergeCells(`C${rowIndex}:E${rowIndex}`)
     worksheet.getCell(`C${rowIndex}`).value = 'TEKNİSYEN'
-    worksheet.getCell(`C${rowIndex}`).alignment = { horizontal: 'center', vertical: 'middle' }
-    
+    worksheet.getCell(`C${rowIndex}`).alignment = {
+      horizontal: 'center',
+      vertical: 'middle',
+    }
+
     worksheet.mergeCells(`F${rowIndex}:H${rowIndex}`)
     worksheet.getCell(`F${rowIndex}`).value = 'İMZA:'
-    worksheet.getCell(`F${rowIndex}`).alignment = { horizontal: 'right', vertical: 'middle' }
+    worksheet.getCell(`F${rowIndex}`).alignment = {
+      horizontal: 'right',
+      vertical: 'middle',
+    }
 
     for (let col = 1; col <= 8; col++) {
       worksheet.getCell(rowIndex, col).border = {
@@ -317,16 +422,25 @@ export async function GET(
     worksheet.mergeCells(`A${rowIndex}:B${rowIndex}`)
     worksheet.getCell(`A${rowIndex}`).value = 'KONTROL EDEN'
     worksheet.getCell(`A${rowIndex}`).font = { bold: true, size: 10 }
-    worksheet.getCell(`A${rowIndex}`).alignment = { horizontal: 'center', vertical: 'middle' }
+    worksheet.getCell(`A${rowIndex}`).alignment = {
+      horizontal: 'center',
+      vertical: 'middle',
+    }
     worksheet.getCell(`A${rowIndex}`).fill = createFill(mediumGray)
-    
+
     worksheet.mergeCells(`C${rowIndex}:E${rowIndex}`)
     worksheet.getCell(`C${rowIndex}`).value = 'POSTABAŞI'
-    worksheet.getCell(`C${rowIndex}`).alignment = { horizontal: 'center', vertical: 'middle' }
-    
+    worksheet.getCell(`C${rowIndex}`).alignment = {
+      horizontal: 'center',
+      vertical: 'middle',
+    }
+
     worksheet.mergeCells(`F${rowIndex}:H${rowIndex}`)
     worksheet.getCell(`F${rowIndex}`).value = 'İMZA:'
-    worksheet.getCell(`F${rowIndex}`).alignment = { horizontal: 'right', vertical: 'middle' }
+    worksheet.getCell(`F${rowIndex}`).alignment = {
+      horizontal: 'right',
+      vertical: 'middle',
+    }
 
     for (let col = 1; col <= 8; col++) {
       worksheet.getCell(rowIndex, col).border = {
@@ -342,16 +456,25 @@ export async function GET(
     worksheet.mergeCells(`A${rowIndex}:B${rowIndex}`)
     worksheet.getCell(`A${rowIndex}`).value = 'ONAY VEREN'
     worksheet.getCell(`A${rowIndex}`).font = { bold: true, size: 10 }
-    worksheet.getCell(`A${rowIndex}`).alignment = { horizontal: 'center', vertical: 'middle' }
+    worksheet.getCell(`A${rowIndex}`).alignment = {
+      horizontal: 'center',
+      vertical: 'middle',
+    }
     worksheet.getCell(`A${rowIndex}`).fill = createFill(mediumGray)
-    
+
     worksheet.mergeCells(`C${rowIndex}:E${rowIndex}`)
     worksheet.getCell(`C${rowIndex}`).value = 'MÜHENDİS'
-    worksheet.getCell(`C${rowIndex}`).alignment = { horizontal: 'center', vertical: 'middle' }
-    
+    worksheet.getCell(`C${rowIndex}`).alignment = {
+      horizontal: 'center',
+      vertical: 'middle',
+    }
+
     worksheet.mergeCells(`F${rowIndex}:H${rowIndex}`)
     worksheet.getCell(`F${rowIndex}`).value = 'İMZA:'
-    worksheet.getCell(`F${rowIndex}`).alignment = { horizontal: 'right', vertical: 'middle' }
+    worksheet.getCell(`F${rowIndex}`).alignment = {
+      horizontal: 'right',
+      vertical: 'middle',
+    }
 
     for (let col = 1; col <= 8; col++) {
       worksheet.getCell(rowIndex, col).border = {
@@ -380,19 +503,30 @@ export async function GET(
     const buffer = await workbook.xlsx.writeBuffer()
 
     // Create safe filename (remove special chars)
-    const safeSerial = batteryBoxProcess.batteryBox.serialNumber.replace(/[^a-zA-Z0-9-_]/g, '_')
-    const safeProcess = batteryBoxProcess.process.name.replace(/[^a-zA-Z0-9-_]/g, '_')
+    const safeSerial = batteryBoxProcess.batteryBox.serialNumber.replace(
+      /[^a-zA-Z0-9-_]/g,
+      '_',
+    )
+    const safeProcess = batteryBoxProcess.process.name.replace(
+      /[^a-zA-Z0-9-_]/g,
+      '_',
+    )
     const filename = `TEMSA_${safeSerial}_${safeProcess}_Kontrol_Plani.xlsx`
 
     return new NextResponse(buffer, {
       headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Type':
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     })
   } catch (error) {
     console.error('Error exporting checklist:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    return NextResponse.json({ error: 'Failed to export checklist', details: errorMessage }, { status: 500 })
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json(
+      { error: 'Failed to export checklist', details: errorMessage },
+      { status: 500 },
+    )
   }
 }
